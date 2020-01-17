@@ -1,229 +1,163 @@
 import React from 'react';
-import { Card, Icon, Button, Tooltip, Modal, Input, message, Table, Popconfirm } from 'antd';
+import {AutoComplete, Button, Icon, Input, message, Card, Avatar, Spin } from 'antd';
 import './App.css';
 import Background from './components/Background'
-import { TweenOneGroup } from 'rc-tween-one'
-import Texty from 'rc-texty'
 
-const { TextArea } = Input
-
-const TableContext = React.createContext(false)
+const { Option } = AutoComplete
 
 interface props {}
 
 interface state {
-    visible: boolean,
-    textAreaVal: string,
-    tasks: any,
-    isPageTween: boolean,
-    selectedRowKeys: Array<number>
+    value: string,
+    dataSource: any,
+    loading: boolean
 }
+
+let u = new URLSearchParams()
+u.append('method', 'flickr.photos.search')
+u.append('api_key', '3e7cc266ae2b0e0d78e279ce8e361736')
+u.append('format', 'json')
+u.append('nojsoncallback', '1')
+u.append('safe_search', '1')
+u.append('text', 'kittens')
+u.append('page', '1')
 
 class App extends React.Component<props, state> {
     constructor(props: object) {
         super(props)
         this.state = {
-            visible: false,
-            isPageTween: false,
-            textAreaVal: '',
-            selectedRowKeys: [],
-            tasks: [{key:new Date().getTime(),task:'Cosmos/ATOM/BTC'},{key:new Date().getTime() + Math.random(),task:'bilibili memeda'},{key:new Date().getTime() + Math.random(),task:'League of Legends'},{key:new Date().getTime() + Math.random(),task:'Come on baby'},{key:new Date().getTime() + Math.random(),task:'Goodbye Baby'}]
+            value: '',
+            dataSource: [],
+            loading: false
         }
     }
-    showModal = () => {
-        this.setState({
-            visible: true,
-        })
+    photoSort:any = []
+    open(url:string) {
+        window.open(url, '_blank')
     }
-    handleTextArea = (e: any) => {
-        e.persist()
-        this.setState({
-            textAreaVal: e.target.value,
+    renderCard(opt:any) {
+        let items:any = []
+        opt.forEach((op:any) => {
+            items.push(<Card
+                key={op.id}
+                bordered={false}
+                hoverable={true}
+                style={{display: 'inline-block',margin:5}}
+                onClick={() => this.open(`http://farm${op.farm}.static.flickr.com/${op.server}/${op.id}_${op.secret}.jpg`)}
+            >
+                <Card.Meta
+                    avatar={<Avatar
+                        size="large"
+                        shape="square"
+                        alt="failed"
+                        src={`http://farm${op.farm}.static.flickr.com/${op.server}/${op.id}_${op.secret}.jpg`} />}
+                />
+            </Card>)
         })
+        return items
     }
-    handleOk = () => {
-        if (!this.state.textAreaVal.trim()) {
-            message.warning('No Content')
+    fetchData(u:any) {
+        this.setState({
+            loading: true
+        })
+        fetch('https://api.flickr.com/services/rest/?' + u)
+            .then((res) => {
+                return res.json().then((json) => {
+                    this.photoSort = []
+                    let photo = json.photos.photo
+                    let temp:number = 0
+                    for (let i = 0; i < photo.length; i++) {
+                        this.photoSort.push([])
+                        for (let j = i; j <= i;j+=4) {
+                            this.photoSort[temp].push(photo[i])
+                            i++
+                            this.photoSort[temp].push(photo[i])
+                            i++
+                            this.photoSort[temp].push(photo[i])
+                            i++
+                            this.photoSort[temp].push(photo[i])
+                            temp++
+                        }
+                    }
+                    const options = this.photoSort.map((opt:any, i:any) => (
+                        <Option key={opt[0].id} value={`row ${opt[0].id}`}>
+                            {this.renderCard(opt)}
+                        </Option>
+                    )).concat([
+                        <Option disabled key="all" className="show-all">
+                            {/*<a onClick={() => this.viewMore((json.photos.page + 1).toString())} rel="noopener noreferrer">*/}
+                                {/*View more results*/}
+                            {/*</a>*/}
+                            <Button onClick={() => this.viewMore((json.photos.page + 1).toString())} type="primary" size="small">
+                                View more results
+                            </Button>
+                        </Option>,
+                    ])
+                    if (this.state.dataSource.length) {
+                        let dataSource = this.state.dataSource
+                        dataSource.pop()
+                        dataSource = dataSource.concat(options)
+                        console.log(111)
+                        this.setState({
+                            dataSource,
+                            loading: false
+                        })
+                    } else {
+                        this.setState({
+                            dataSource: options,
+                            loading: false
+                        })
+                    }
+                })
+            })
+            .catch((err) => {
+                console.log(err)
+            })
+    }
+    handleClick = () => {
+        if (!this.state.value.trim()) {
+            message.warning('No Input Content')
             return
         }
-        const tasks = this.state.tasks.concat({key: new Date().getTime() + Math.random(), task: this.state.textAreaVal})
-        this.setState(preState => ({
-            tasks,
-            isPageTween: false
-        }), () => {
-            this.setState({
-                visible: false,
-                textAreaVal: ''
-            })
-        })
+        u.delete('text')
+        u.append('text', this.state.value)
+        this.fetchData(u)
     }
-    delTaskByIndex = (index: number) => {
-        const tasks = this.state.tasks.filter((item: any) => {
-            return item.key !== index
-        })
-        this.setState(preState => ({
-            tasks,
-            isPageTween: false
-        }))
+    onChange = (value:any) => {
+        this.setState({ value })
     }
-    columns = [
-        {
-            title: '',
-            dataIndex: 'status',
-            key: 'status'
-        },
-        {
-            title: 'TASK',
-            dataIndex: 'task',
-            key: 'task',
-            width: '50%',
-            render: (text: any, record: any) => {
-                if (~this.state.selectedRowKeys.indexOf(record.key)) {
-                    return (
-                        <Texty className='done' type='bounce'>{record.task}</Texty>
-                    )
-                }
-                return (
-                    <span className='undone'>{record.task}</span>
-                )
-            }
-        },
-        {
-            title: 'OPERATION',
-            dataIndex: 'operation',
-            key: 'operation',
-            render: (text: any, record: any) =>
-                this.state.tasks.length >= 1 ? (
-                    <Popconfirm title="Sure to delete?"
-                                onConfirm={() => {this.delTaskByIndex(Number(record.key))}}
-                    >
-                        <Button type="link">Delete</Button>
-                    </Popconfirm>
-                ) : null
-        }
-    ]
-    rowSelection = {
-        onChange: (selectedRowKeys: any, selectedRows: any) => {
-            // console.log(`selectedRowKeys: ${selectedRowKeys}`, 'selectedRows: ', selectedRows);
-            // console.log(selectedRowKeys)
-            this.setState({
-                selectedRowKeys
-            })
-        },
-        getCheckboxProps: (record: any) => ({
-            disabled: record.name === 'Disabled User', // Column configuration not to be checked
-            name: record.name
-        })
-    }
-    onEnd = (e: any) => {
-        const dom = e.target
-        dom.style.height = 'auto'
-    }
-    enterAnim = [
-        {
-            opacity: 0, x: 30, backgroundColor: '#fffeee',duration: 0
-        },
-        {
-            height: 0,
-            duration: 100,
-            type: 'from',
-            delay: 100,
-            ease: 'easeOutQuad',
-            onComplete: this.onEnd,
-        },
-        {
-            opacity: 1, x: 0, duration: 100, ease: 'easeOutQuad'
-        },
-        { delay: 1000, backgroundColor: '#fff' }
-    ]
-    pageEnterAnim = [
-        {
-            opacity: 0, duration: 0,
-        },
-        {
-            height: 0,
-            duration: 150,
-            type: 'from',
-            delay: 150,
-            ease: 'easeOutQuad',
-            onComplete: this.onEnd,
-        },
-        {
-            opacity: 1, duration: 150, ease: 'easeOutQuad'
-        }
-    ]
-    leaveAnim = [
-        { duration: 350, opacity: 0 },
-        { height: 0, duration: 300, ease: 'easeOutQuad' }
-    ]
-    pageLeaveAnim = [
-        { duration: 150, opacity: 0 },
-        { height: 0, duration: 150, ease: 'easeOutQuad' }
-    ]
-    animTag = ($props: any) => {
-        return (
-            <TableContext.Consumer>
-                {(isPageTween) => {
-                    return (
-                        <TweenOneGroup
-                            component="tbody"
-                            enter={!isPageTween ? this.enterAnim : this.pageEnterAnim }
-                            leave={!isPageTween ? this.leaveAnim : this.pageLeaveAnim}
-                            appear={true}
-                            exclusive
-                            {...$props}
-                        />
-                    )
-                }}
-            </TableContext.Consumer>
-        )
-    }
-    pageChange = () => {
-        this.setState({
-            isPageTween: true
-        })
+    viewMore(page:string) {
+        u.delete('page')
+        u.append('page', page)
+        this.fetchData(u)
     }
     render() {
         return (
             <div className="App">
                 <Background />
-                <Modal
-                    title="Add Task"
-                    style={{ left:90,top: 20 }}
-                    width={300}
-                    mask={false}
-                    visible={this.state.visible}
-                    onOk={this.handleOk}
-                    onCancel={() => {this.setState({
-                        visible: false
-                    })}}
+                <AutoComplete
+                    dataSource={this.state.dataSource}
+                    style={{ width: 500,marginTop: 200 }}
+                    dropdownMenuStyle={{textAlign:'center'}}
+                    onChange={this.onChange}
+                    placeholder="input here"
+                    optionLabelProp="value"
+                    notFoundContent={this.state.loading ? <Spin size="small" /> : null}
                 >
-                    <TextArea rows={4} value={this.state.textAreaVal} onChange={this.handleTextArea} />
-                </Modal>
-                <Card
-                    title={
-                        <h2 style={{ marginBottom: 0 }}> <Icon type="schedule" style={{ marginRight: 10 }}/>TO-DO LIST</h2>
-                    }
-                    bordered={false}
-                    style={{ width: '80%',maxWidth: '100%',textAlign: 'justify' }}
-                    className="card"
-                    extra={
-                        <Tooltip placement="top" title="Click To Add Task" arrowPointAtCenter>
-                            <Button type="primary" shape="circle" icon="plus" onClick={this.showModal} />
-                        </Tooltip>
-                    }
-                >
-                    <TableContext.Provider value={this.state.isPageTween}>
-                        <Table
-                            columns={this.columns}
-                            pagination={false}
-                            dataSource={this.state.tasks}
-                            rowSelection={this.rowSelection}
-                            components={{ body: { wrapper: this.animTag } }}
-                            onChange={this.pageChange}
-                        />
-                    </TableContext.Provider>
-                </Card>
+                    <Input
+                        suffix={
+                            <Button
+                                className="search-btn"
+                                style={{ marginRight: -12 }}
+                                type="primary"
+                                onClick={this.handleClick}
+                                loading={this.state.loading}
+                            >
+                                <Icon type="search" />
+                            </Button>
+                        }
+                    />
+                </AutoComplete>
             </div>
         )
     }
